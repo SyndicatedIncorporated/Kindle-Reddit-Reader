@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kindle Reddit Reader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .post, .comment {
+            background-color: white;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #0000EE;
+            cursor: pointer;
+        }
+        .author, .subreddit, .score, .comment-meta {
+            font-size: 12px;
+            color: #666;
+        }
+        .comment {
+            margin-left: 20px;
+            border-left: 1px solid #ccc;
+        }
+        .comment-body {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .comment-score {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        #back-button {
+            display: none;
+            margin-bottom: 10px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Kindle Reddit Reader</h1>
+    <button id="back-button" onclick="displayPosts()">Back to Posts</button>
+    <div id="content"></div>
+
+    <script>
+        const subreddit = 'kindlescribe';
+        const limit = 10;
+        let currentPosts = [];
+
+        function displayPosts() {
+            const content = document.getElementById('content');
+            content.innerHTML = '';
+            currentPosts.forEach((post, index) => {
+                const postDiv = document.createElement('div');
+                postDiv.className = 'post';
+                let postContent = `
+                    <div class="title" onclick="loadComments(${index})">${post.data.title}</div>
+                    <div class="author">Posted by ${post.data.author}</div>
+                    <div class="subreddit">r/${post.data.subreddit}</div>
+                    <div class="score">Score: ${post.data.score}</div>
+                `;
+                if (post.data.url && post.data.url.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+                    postContent += `<img src="${post.data.url}" alt="Post image">`;
+                } else if (post.data.selftext) {
+                    postContent += `<p>${post.data.selftext}</p>`;
+                }
+                postDiv.innerHTML = postContent;
+                content.appendChild(postDiv);
+            });
+            document.getElementById('back-button').style.display = 'none';
+        }
+
+        function loadComments(postIndex) {
+            const post = currentPosts[postIndex];
+            fetch(`https://www.reddit.com${post.data.permalink}.json`)
+                .then(response => response.json())
+                .then(data => {
+                    const content = document.getElementById('content');
+                    let postContent = `
+                        <div class="post">
+                            <div class="title">${post.data.title}</div>
+                            <div class="author">Posted by ${post.data.author}</div>
+                            <div class="subreddit">r/${post.data.subreddit}</div>
+                            <div class="score">Score: ${post.data.score}</div>
+                    `;
+                    if (post.data.url && post.data.url.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+                        postContent += `<img src="${post.data.url}" alt="Post image">`;
+                    } else if (post.data.selftext) {
+                        postContent += `<p>${post.data.selftext}</p>`;
+                    }
+                    postContent += '</div>';
+                    content.innerHTML = postContent;
+
+                    const comments = data[1].data.children;
+                    comments.forEach(comment => {
+                        if (comment.kind === 't1') {
+                            content.appendChild(createCommentElement(comment.data, 0));
+                        }
+                    });
+                    document.getElementById('back-button').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    content.innerHTML += '<p>Error loading comments. Please try again.</p>';
+                });
+        }
+
+        function createCommentElement(commentData, depth) {
+            const commentDiv = document.createElement('div');
+            commentDiv.className = 'comment';
+            commentDiv.style.marginLeft = `${depth * 20}px`;
+
+            let commentContent = `
+                <div class="comment-meta">${commentData.author}</div>
+                <div class="comment-body">${commentData.body}</div>
+                <div class="comment-score">Score: ${commentData.score}</div>
+            `;
+
+            commentDiv.innerHTML = commentContent;
+
+            if (commentData.replies && commentData.replies.data && commentData.replies.data.children.length > 0) {
+                commentData.replies.data.children.forEach(reply => {
+                    if (reply.kind === 't1') {
+                        commentDiv.appendChild(createCommentElement(reply.data, depth + 1));
+                    }
+                });
+            }
+
+            return commentDiv;
+        }
+
+        fetch(`https://www.reddit.com/r/${subreddit}/hot.json?limit=${limit}`)
+            .then(response => response.json())
+            .then(data => {
+                currentPosts = data.data.children;
+                displayPosts();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('content').innerHTML = 'Error loading content. Please try again.';
+            });
+    </script>
+</body>
+</html>
